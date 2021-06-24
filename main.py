@@ -27,7 +27,7 @@ ff_res = ff_n_pnts/ff_screen_size
 
 # Build simulation cell
 dpml = 1
-padding = 1
+padding = 5
 sx = 2 + 2*dpml + wall_width
 sy = 2*( dpml + padding ) + d + 0.5*( wall_width + slit_width )
 
@@ -70,7 +70,6 @@ geometry = [ mp.Block( material=Al,
                        size=mp.Vector3( wall_width, middle_block_len ))
            ]
 
-
 # 1D simulation without geometry
 sim = mp.Simulation( cell_size = cell_1D,
                      resolution=res,
@@ -103,10 +102,29 @@ n2f_point = mp.Vector3( -src_pos )      # The Near2Far is on the opisite side to
 n2f_obj = sim.add_near2far( frq_cen, dfrq, nfrq, mp.Near2FarRegion( center=n2f_point,
                                                                     size=mp.Vector3( y=sy )))
 
+# Fluxes
+box_x_tpos = mp.FluxRegion( center=mp.Vector3( ( 0.5*wall_width - src_pos )/2, 0.5*sy-dpml ), 
+                            size=mp.Vector3( -src_pos - 0.5*wall_width ) )
+box_x_bpos = mp.FluxRegion( center=mp.Vector3( (0.5*wall_width + -src_pos)/2 , -0.5*sy+dpml ), 
+                            size=mp.Vector3( -src_pos - 0.5*wall_width ) )
+box_x_outpos = mp.FluxRegion( center=mp.Vector3( -src_pos ),   
+                              size=mp.Vector3( y=sy-2*dpml ) )
+box_x_top = sim.add_flux( frq_cen, dfrq, nfrq, box_x_tpos )
+box_x_bot = sim.add_flux( frq_cen, dfrq, nfrq, box_x_bpos )
+box_y_end = sim.add_flux( frq_cen, dfrq, nfrq, box_x_outpos )
 
+# Run sim again
 sim.run( until_after_sources=mp.stop_when_fields_decayed( 50, mp.Ez, n2f_point, 1e-8 ) )
 
-ff_full = sim.get_farfields( n2f_obj, ff_res, center=mp.Vector3( ff_dist ), size=mp.Vector3( y=ff_screen_size ) )
+# Collect far field data
+ff_full = sim.get_farfields( n2f_obj, ff_res, center=mp.Vector3( ff_dist - src_pos ), size=mp.Vector3( y=ff_screen_size ) )
+
+# Collect flux data
+box_x_top_flux = mp.get_fluxes( box_x_top )
+box_x_bot_flux = mp.get_fluxes( box_x_bot )
+box_y_end_flux = mp.get_fluxes( box_y_end )
+
+
 
 # Post processing data
 ff_frq = mp.get_near2far_freqs( n2f_obj )
@@ -114,10 +132,19 @@ ff_points = np.linspace( -0.5*ff_screen_size, 0.5*ff_screen_size, ff_n_pnts )
 anlge = [ np.degrees( np.arctan( i ) ) for i in ff_points/ff_dist ]
 
 # Get Fields
-field = np.abs( ff_full['Ez']**2/ff_empty['Ez']**2 )
+field = np.abs( ff_full['Ez']**2 )
 
 # Get point where 0.5 \mu m is
 indx = np.where( np.array( ff_frq ) == 1/0.5 )[0][0]
 
 plt.plot( anlge, field[:,indx] )
 plt.show()
+
+# Process flux data
+flux_frq = mp.get_flux_freqs( box_y_end )
+indx = np.where( np.array( flux_frq ) == 1/0.5 )[0][0]
+
+total_flux = np.abs( box_y_end_flux[indx] ) + np.abs( box_x_bot_flux[indx] ) + np.abs( box_x_top_flux[indx] )
+pml_flux = np.abs( box_x_bot_flux[indx] ) + np.abs( box_x_top_flux[indx] )
+
+print( "\n\n\tSide flux percent: " + str( 100*pml_flux/total_flux ) )
