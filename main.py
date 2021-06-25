@@ -9,7 +9,7 @@ res = 50
 
 #### User control variables ####
 # Define slits
-d = 3
+d = 3.0
 slit_width = 0.5
 wall_width = 0.5
 
@@ -57,7 +57,7 @@ source_1D = [ mp.Source( mp.GaussianSource( frq_cen, dfrq, is_integrated=True ),
 top_slit_cen = 0.5*( sy - padding )
 bot_slit_cen = -top_slit_cen
 
-middle_block_len = d - 2*slit_width
+middle_block_len = d - slit_width
 
 geometry = [ mp.Block( material=Al,
                        center=mp.Vector3( y=top_slit_cen ),
@@ -131,13 +131,19 @@ ff_frq = mp.get_near2far_freqs( n2f_obj )
 ff_points = np.linspace( -0.5*ff_screen_size, 0.5*ff_screen_size, ff_n_pnts )
 anlge = [ np.degrees( np.arctan( i ) ) for i in ff_points/ff_dist ]
 
-# Get Fields
-field = np.abs( ff_full['Ez']**2 )
-
 # Get point where 0.5 \mu m is
 indx = np.where( np.array( ff_frq ) == 1/0.5 )[0][0]
 
-plt.plot( anlge, field[:,indx] )
+# Get Fields
+field = np.abs( ff_full['Ez']**2 )
+norm = 1/np.sum( field[:,indx] )
+print( norm*np.sum( field[:,indx] ) )
+
+plt.plot( anlge, norm*field[:,indx], '-b' )
+plt.xlabel( "Diffraction Angle (Degrees)", size="x-large" )
+plt.ylabel( "Normalised Field Amplitude", size="x-large" )
+plt.tight_layout()
+plt.savefig("img/al_slit_pattern.pdf", dpi=300)
 plt.show()
 
 # Process flux data
